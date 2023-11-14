@@ -4,105 +4,109 @@ using FilmesApi.DTO;
 using FilmesApi.Models;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using System.Runtime.CompilerServices;
 
 namespace FilmesApi.Controllers
 {
-  [Route("api/[controller]")]
-  [ApiController]
-  public class FilmeController : ControllerBase
-  {
-    private readonly FilmesContext _context;
-    private readonly IMapper _mapper;
+	[Route("api/[controller]")]
+	[ApiController]
+	public class FilmeController : ControllerBase
+	{
+		private readonly FilmesContext _context;
+		private readonly IMapper _mapper;
 
-    public FilmeController(FilmesContext context, IMapper mapper)
-    {
-      _mapper = mapper;
-      _context = context;
-    }
+		public FilmeController(FilmesContext context, IMapper mapper)
+		{
+			_mapper = mapper;
+			_context = context;
+		}
 
-    /// <summary>
-    /// Adiciona um filme ao banco de dados
-    /// </summary>
-    /// <param name="filmeDto">Objeto com os campos necessários para criação de um filme</param>
-    /// <returns>IActionResult</returns>
-    /// <response code="201">Caso inserção seja feita com sucesso</response>
-    [HttpPost]
-    [ProducesResponseType(StatusCodes.Status201Created)]
-    public IActionResult AdicionaFilme([FromBody] FilmesDTO filmeDto)
-    {
-      //Fazer um map *PARA* um filme a *PARTIR* de um DTO;
-      Filme filme = _mapper.Map<Filme>(filmeDto);
-      _context.Filmes.Add(filme);
-      _context.SaveChanges();
-      return CreatedAtAction(nameof(FilmeById), new { id = filme.Id }, filme);
-    }
+		/// <summary>
+		/// Adiciona um filme ao banco de dados
+		/// </summary>
+		/// <param name="filmeDto">Objeto com os campos necessários para criação de um filme</param>
+		/// <returns>IActionResult</returns>
+		/// <response code="201">Caso inserção seja feita com sucesso</response>
+		[HttpPost]
+		[ProducesResponseType(StatusCodes.Status201Created)]
+		public IActionResult AdicionaFilme([FromBody] FilmesDTO filmeDto)
+		{
+			//Fazer um map *PARA* um filme a *PARTIR* de um DTO;
+			Filme filme = _mapper.Map<Filme>(filmeDto);
+			_context.Filmes.Add(filme);
+			_context.SaveChanges();
+			return CreatedAtAction(nameof(FilmeById), new { id = filme.Id }, filme);
+		}
 
-    [HttpGet]
-    public IEnumerable<ReadFilmeDTO> GetFilmes([FromQuery]int skip = 0, [FromQuery] int take = 10)
-    {
-      return _mapper.Map<List<ReadFilmeDTO>>(_context.Filmes.Skip(skip).Take(take));
-    }
+		[HttpGet]
+		public IEnumerable<ReadFilmeDTO> GetFilmes([FromQuery] int skip = 0, [FromQuery] int take = 10, [FromQuery] string? nomeCinema = null)
+		{
+			if(nomeCinema is null)
+				return _mapper.Map<List<ReadFilmeDTO>>(_context.Filmes.Skip(skip).Take(take).ToList());
 
-    [HttpGet("{Id}")]
-    public IActionResult FilmeById(int Id)
-    {
-      var filme = _context.Filmes.FirstOrDefault(filmeid => filmeid.Id == Id);
+			return _mapper.Map<List<ReadFilmeDTO>>(_context.Filmes.Skip(skip).Take(take).Where(filme => filme.Sessoes
+				.Any(sessao => sessao.Cinema.Nome == nomeCinema)).ToList());
+		}
 
-      if (filme is null)
-        return NotFound();
+		[HttpGet("{Id}")]
+		public IActionResult FilmeById(int Id)
+		{
+			var filme = _context.Filmes.FirstOrDefault(filmeid => filmeid.Id == Id);
 
-      var filmeDto = _mapper.Map<ReadFilmeDTO>(filme);
+			if (filme is null)
+				return NotFound();
 
-      return Ok(filmeDto);
-    }
+			var filmeDto = _mapper.Map<ReadFilmeDTO>(filme);
 
-    [HttpPut("Atualizar/{id}")]
-    public IActionResult AtualizarFilme(int id, [FromBody]UpdateFilmeDTO filmeDTO)
-    {
-      var filme = _context.Filmes.FirstOrDefault(filme => filme.Id == id);
+			return Ok(filmeDto);
+		}
 
-      if (filme == null)    
-        return NotFound();
-     
-      _mapper.Map(filmeDTO, filme);
-      _context.SaveChanges();
+		[HttpPut("Atualizar/{id}")]
+		public IActionResult AtualizarFilme(int id, [FromBody] UpdateFilmeDTO filmeDTO)
+		{
+			var filme = _context.Filmes.FirstOrDefault(filme => filme.Id == id);
 
-      return NoContent();
-    }
+			if (filme == null)
+				return NotFound();
 
-    [HttpPatch("AtualizarParcial/{id}")]
-    public IActionResult AtualizarFilmeParcial(int id, JsonPatchDocument<UpdateFilmeDTO>patch)
-    {
-      var filme = _context.Filmes.FirstOrDefault(filme => filme.Id == id);
+			_mapper.Map(filmeDTO, filme);
+			_context.SaveChanges();
 
-      if (filme == null)
-        return NotFound();
+			return NoContent();
+		}
 
-      var filmeParaAtualizar = _mapper.Map<UpdateFilmeDTO>(filme);
-      patch.ApplyTo(filmeParaAtualizar, ModelState);
+		[HttpPatch("AtualizarParcial/{id}")]
+		public IActionResult AtualizarFilmeParcial(int id, JsonPatchDocument<UpdateFilmeDTO> patch)
+		{
+			var filme = _context.Filmes.FirstOrDefault(filme => filme.Id == id);
 
-      if (!TryValidateModel(filmeParaAtualizar))
-        return ValidationProblem(ModelState);
+			if (filme == null)
+				return NotFound();
 
-      _mapper.Map(filmeParaAtualizar, filme);
-      _context.SaveChanges();
+			var filmeParaAtualizar = _mapper.Map<UpdateFilmeDTO>(filme);
+			patch.ApplyTo(filmeParaAtualizar, ModelState);
 
-      return NoContent();
-    }
+			if (!TryValidateModel(filmeParaAtualizar))
+				return ValidationProblem(ModelState);
 
-    [HttpDelete("DeletarFilme/{id}")]
-    public IActionResult DeletarFilme(int id)
-    {
-      var filme = _context.Filmes.FirstOrDefault(filme => filme.Id == id);
+			_mapper.Map(filmeParaAtualizar, filme);
+			_context.SaveChanges();
 
-      if (filme == null)
-        return NotFound();
+			return NoContent();
+		}
 
-      _context.Remove(filme);
-      _context.SaveChanges();
+		[HttpDelete("DeletarFilme/{id}")]
+		public IActionResult DeletarFilme(int id)
+		{
+			var filme = _context.Filmes.FirstOrDefault(filme => filme.Id == id);
 
-      return NoContent();
-    }
-  }
+			if (filme == null)
+				return NotFound();
+
+			_context.Remove(filme);
+			_context.SaveChanges();
+
+			return NoContent();
+		}
+	}
 }
